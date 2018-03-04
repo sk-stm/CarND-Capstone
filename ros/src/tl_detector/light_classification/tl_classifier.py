@@ -1,3 +1,4 @@
+import rospy
 from styx_msgs.msg import TrafficLight
 
 class TLClassifier(object):
@@ -16,4 +17,5 @@ class TLClassifier(object):
 
         """
         #TODO implement light color prediction
+        rospy.loginfo("try to determine traffic light state")
         return TrafficLight.UNKNOWN

@@ -4,7 +4,6 @@ import rospy
 from std_msgs.msg import Bool
 from dbw_mkz_msgs.msg import ThrottleCmd, SteeringCmd, BrakeCmd, SteeringReport
 from geometry_msgs.msg import TwistStamped
-import math
 
 from twist_controller import Controller
 
@@ -35,6 +34,13 @@ class DBWNode(object):
     def __init__(self):
         rospy.init_node('dbw_node')
 
+        # start with manual drive
+        self._is_dbw_enabled = None
+        self._current_vel_lin = None
+        self._current_vel_ang = None
+        self._des_lin_vel = None
+        self._des_ang_vel = None
+
         vehicle_mass = rospy.get_param('~vehicle_mass', 1736.35)
         fuel_capacity = rospy.get_param('~fuel_capacity', 13.5)
         brake_deadband = rospy.get_param('~brake_deadband', .1)
@@ -53,25 +59,49 @@ class DBWNode(object):
         self.brake_pub = rospy.Publisher('/vehicle/brake_cmd',
                                          BrakeCmd, queue_size=1)
 
-        # TODO: Create `Controller` object
-        # self.controller = Controller(<Arguments you wish to provide>)
+        # Create `Controller` object
+        self.contoller = Controller(vehicle_mass, fuel_capacity, wheel_radius, decel_limit, accel_limit, max_steer_angle,
+                                    wheel_base, steer_ratio, max_lat_accel)
 
-        # TODO: Subscribe to all the topics you need to
+        # Subscribe to all the topics you need to
+        rospy.Subscriber('/twist_cmd', TwistStamped, self._get_twist_cmd)
+        rospy.Subscriber('/vehicle/dbw_enabled', Bool, self._set_bdw)
+        rospy.Subscriber('/current_velocity', TwistStamped, self._get_current_vel)
 
         self.loop()
+
+    def _set_bdw(self, is_dbw_enabled):
+        self._is_dbw_enabled = is_dbw_enabled
+
+    def _get_current_vel(self, curr_vel_twisted_stamped):
+        self._current_vel_lin = curr_vel_twisted_stamped.twist.linear.x
+        self._current_vel_ang = curr_vel_twisted_stamped.twist.angular.z
+
+    def _get_twist_cmd(self, desired_speeds):
+        self._des_lin_vel = desired_speeds.twist.linear.x
+        self._des_ang_vel = desired_speeds.twist.angular.z
 
     def loop(self):
         rate = rospy.Rate(50) # 50Hz
         while not rospy.is_shutdown():
-            # TODO: Get predicted throttle, brake, and steering using `twist_controller`
+            # Get predicted throttle, brake, and steering using `twist_controller`
             # You should only publish the control commands if dbw is enabled
-            # throttle, brake, steering = self.controller.control(<proposed linear velocity>,
-            #                                                     <proposed angular velocity>,
-            #                                                     <current linear velocity>,
-            #                                                     <dbw status>,
-            #                                                     <any other argument you need>)
-            # if <dbw is enabled>:
-            #   self.publish(throttle, brake, steer)
+            # todo remove
+            rospy.loginfo("c_vel: %s, is_dbw: %s, des_lv: %s, des_av: %s", self._current_vel_lin, self._is_dbw_enabled,
+                          self._des_lin_vel, self._des_ang_vel)
+
+            if self._current_vel_lin is not None and \
+                            self._des_lin_vel is not None and \
+                            self._des_ang_vel is not None and \
+                            (self._is_dbw_enabled is not None):
+
+                throttle, brake, steering = self.contoller.control(self._des_lin_vel,  # proposedlinearvelocity
+                                                                   self._des_ang_vel,  # proposed angular velocity
+                                                                   self._current_vel_lin  # current linear velocity
+                                                                   )
+
+                if self._is_dbw_enabled:
+                   self.publish(throttle, brake, steering)
             rate.sleep()
 
     def publish(self, throttle, brake, steer):
