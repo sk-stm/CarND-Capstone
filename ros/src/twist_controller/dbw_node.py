@@ -60,7 +60,8 @@ class DBWNode(object):
                                          BrakeCmd, queue_size=1)
 
         # Create `Controller` object
-        self.contoller = Controller(vehicle_mass, fuel_capacity, wheel_radius, decel_limit, accel_limit, max_steer_angle,
+        self.contoller = Controller(vehicle_mass, fuel_capacity, wheel_radius,
+                                    decel_limit, accel_limit, max_steer_angle,
                                     wheel_base, steer_ratio, max_lat_accel)
 
         # Subscribe to all the topics you need to
