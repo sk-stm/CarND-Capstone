@@ -8,7 +8,6 @@ ONE_MPH = 0.44704
 
 class Controller(object):
     def __init__(self, *args, **kwargs):
-        self._sample_time = 0.02 # 50Hz
         vehicle_mass = args[0]
         fuel_capacity = args[1]
         wheel_radius = args[2]
@@ -18,12 +17,13 @@ class Controller(object):
         wheel_base = args[6]
         steer_ratio = args[7]
         max_lat_accel = args[8]
+        self._sample_time = 1/args[9]  # 1/loop rate
 
         self.r = wheel_radius
         self.mass = (vehicle_mass + fuel_capacity*GAS_DENSITY)
 
         v_kp = 0.4
-        v_ki = 0.001
+        v_ki = 0.000
         v_kd = 0.2
         self.vel_pid = PID(kp=v_kp, ki=v_ki, kd=v_kd, mn=self.decel_limit, mx=accel_limit)  # speed controller
 
@@ -47,7 +47,7 @@ class Controller(object):
         brake = 0
         vel_error = proposed_lin_vel - current_lin_vel
         vel_cmd = self.vel_pid.step(vel_error, self._sample_time)
-        if vel_cmd > 0.01:
+        if vel_cmd > 0.5:
             # TODO maybe use low pass filter?
             throttle = min(1, vel_cmd)
             brake = 0
