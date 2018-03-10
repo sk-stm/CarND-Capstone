@@ -17,7 +17,7 @@ class Controller(object):
         wheel_base = args[6]
         steer_ratio = args[7]
         max_lat_accel = args[8]
-        self._sample_time = 1/args[9]  # 1/loop rate
+        self._sample_time = 1.0/args[9]  # 1/loop rate
 
         self.r = wheel_radius
         self.mass = (vehicle_mass + fuel_capacity*GAS_DENSITY)
