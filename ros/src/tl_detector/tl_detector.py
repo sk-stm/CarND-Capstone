@@ -59,10 +59,13 @@ class TLDetector(object):
         rospy.spin()
 
     def pose_cb(self, msg):
-        self.pose = msg
+        self.pose = msg.pose
 
-    def waypoints_cb(self, waypoints):
-        self.waypoints = waypoints
+    def waypoints_cb(self, msg):
+        # waypoints_cb should be called just once
+        if self.waypoints != None:
+            rospy.logwarn("base_waypoints message received again.")
+        self.waypoints = msg.waypoints
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
@@ -125,8 +128,8 @@ class TLDetector(object):
         :param idx2: index of the second waypoint in the list.
         :return: distance between the two waypoints
         """
-        return self._calc_dist(self.waypoints.waypoints[idx1].pose.pose.position,
-                               self.waypoints.waypoints[idx2].pose.pose.position)
+        return self._calc_dist(self.waypoints[idx1].pose.pose.position,
+                               self.waypoints[idx2].pose.pose.position)
 
     def _calc_tl_wp_dist(self, tl_idx, wp_idx):
         """
@@ -136,7 +139,7 @@ class TLDetector(object):
         :return: distance between the two points
         """
         return self._calc_dist(self.lights[tl_idx].pose.pose.position,
-                               self.waypoints.waypoints[wp_idx].pose.pose.position)
+                               self.waypoints[wp_idx].pose.pose.position)
 
     def _calc_dist(self, position, position2):
         """
@@ -158,8 +161,8 @@ class TLDetector(object):
         :return: distance between the point and waypoint
         """
         return math.sqrt(
-            (px - self.waypoints.waypoints[wp_idx].pose.pose.position.x) ** 2 +
-            (py - self.waypoints.waypoints[wp_idx].pose.pose.position.y) ** 2)
+            (px - self.waypoints[wp_idx].pose.pose.position.x) ** 2 +
+            (py - self.waypoints[wp_idx].pose.pose.position.y) ** 2)
 
 
     def get_light_state(self, light):
@@ -235,7 +238,7 @@ class TLDetector(object):
         while closest_tl_idx == current_closest_tl_idx:
             # search along waypoints until another traffic light is found
             closest_tl_idx, closest_tl_dist = self.get_closest(self.lights,
-                                                               self.waypoints.waypoints[car_wp_idx + i].pose.pose.position)
+                                                               self.waypoints[car_wp_idx + i].pose.pose.position)
             i += 1
         light_wp_idx = self._find_waypoint_next_to_tl(car_wp_idx + i, closest_tl_idx)
         # this assumes that the traffic lights and stop lines have the same index in the array
@@ -250,7 +253,7 @@ class TLDetector(object):
         :param car_wp_idx: waypoint index next to the car
         :return: traffic light ahead of the car (might not be seen yet)
         """
-        closest_tl_idx, closest_tl_dist = self.get_closest(self.lights, self.waypoints.waypoints[car_wp_idx].pose.pose.position)
+        closest_tl_idx, closest_tl_dist = self.get_closest(self.lights, self.waypoints[car_wp_idx].pose.pose.position)
 
         # test if closest traffic light is in front of car
         nearer_wp_dist = self._calc_tl_wp_dist(tl_idx=closest_tl_idx, wp_idx=car_wp_idx+1)
@@ -282,7 +285,7 @@ class TLDetector(object):
         # List of positions that correspond to the line to stop in front of for a given intersection
         stop_line_positions = self.config['stop_line_positions']
         if self.pose is not None and self.waypoints is not None:
-            car_wp_idx, _ = self.get_closest(self.waypoints.waypoints, self.pose.pose.position)
+            car_wp_idx, _ = self.get_closest(self.waypoints, self.pose.position)
 
             # TODO find the closest visible traffic light (if one exists)
 
