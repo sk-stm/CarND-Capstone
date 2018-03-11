@@ -25,7 +25,6 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 100  # Number of waypoints we will publish. You can change this number
-STOP_AHEAD_WPS = 0
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -53,6 +52,10 @@ class WaypointUpdater(object):
         rospy.spin()
 
     def _get_current_vel(self, curr_vel_twisted_stamped):
+        """
+        Sets the current velocity from the ros message to a local attribute.
+        :param curr_vel_twisted_stamped: current velocity of the car as ros message
+        """
         self.current_vel = curr_vel_twisted_stamped.twist.linear.x
 
     def pose_cb(self, msg):
@@ -70,11 +73,16 @@ class WaypointUpdater(object):
             self._publish_next_waypoints()
 
     def _calculate_next_waypoints(self):
+        """
+        Calulates the waypoints to follow. Also includes the traffic light in front of the car into the behaviour.
+        """
         self._calculate_next_waypoints_without_traffic_light()
         self._include_traffic_light_behaviour()
 
     def _calculate_next_waypoints_without_traffic_light(self):
-        """"""
+        """
+        Plans the next waypoints without taking the traffic lights into account.
+        """
         self.car_wp_idx = self._find_wp_in_front_of_car()
 
         if not self.next_n_waypoints or self.continue_driving_from_traffic_light:
@@ -122,13 +130,28 @@ class WaypointUpdater(object):
             next_n_waypoints.pop(0)
             next_n_waypoint_glob_idxs.pop(0)
             # append as many as removed at the end
-            next_wp = copy.deepcopy(self.base_waypoints.waypoints[car_wp_idx + LOOKAHEAD_WPS + i])
+            next_wp_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints.waypoints, car_wp_idx + LOOKAHEAD_WPS + i)
+            next_wp = copy.deepcopy(self.base_waypoints.waypoints[next_wp_idx])
             next_n_waypoints.append(next_wp)
             next_n_waypoint_glob_idxs.append(car_wp_idx + LOOKAHEAD_WPS + i)
             i += 1
 
+    def _get_wp_idx_wihtin_array_bound(self, waypoint_list, idx):
+        """
+        Returns the index in a waypoint list assuming the list is arranged in a circle. So if the given index
+        exeeds the length of the array, it starts to count at the beginning again.
+        :param waypoint_list: list to get the index in
+        :param idx: index to retrieve
+        :return: index in the array.
+        """
+        return idx % len(waypoint_list)
+
     def _include_traffic_light_behaviour(self):
-        """"""
+        """
+        Changes the until now planed waypoint behaviour in favor of traffic lights.
+        That is, the waypoints to travel at, will be changed to stop at the stop lane if there is a red traffic light
+        in front of the car.
+        """
         # we can calculate a behaviour for traffic lights if no stop waypoint or base waypoint is present. (for startup)
         if not self.stop_waypoint_idx_for_traffic_light or not self.base_waypoints:
             return
@@ -144,11 +167,10 @@ class WaypointUpdater(object):
         self.seeing_red_light = True
         self.car_wp_idx = self._find_wp_in_front_of_car()
 
-        stop_waypoint_idx_for_traffic_light = self.stop_waypoint_idx_for_traffic_light - STOP_AHEAD_WPS
-        if self.car_wp_idx < stop_waypoint_idx_for_traffic_light:
+        if self.car_wp_idx < self.stop_waypoint_idx_for_traffic_light:
             if not self.already_planed_to_stop:
                 self.already_planed_to_stop = True
-                self._plan_stop_wps(stop_waypoint_idx_for_traffic_light)
+                self._plan_stop_wps(self.stop_waypoint_idx_for_traffic_light)
             else:
                 self._update_next_waypoints(next_n_waypoints=self.next_n_waypoints,
                                             next_n_waypoint_glob_idxs=self.next_n_waypoint_glob_idxs,
@@ -160,8 +182,18 @@ class WaypointUpdater(object):
                 self.set_waypoint_velocity(self.next_n_waypoints, i, 0)
 
     def _plan_stop_wps(self, stop_waypoint_idx_for_traffic_light):
+        """
+        Adjusts the next_n_waypoints according to a given index, the car should stop at. This method reduces the speed
+        gradually to the car stops at the waypoint index given to this function.
+        :param stop_waypoint_idx_for_traffic_light: the waypoint the car should stop at.
+        """
         # the stop lane is still in front of us
         number_of_wps_between_car_and_stop_lane = stop_waypoint_idx_for_traffic_light - self.car_wp_idx
+
+        if number_of_wps_between_car_and_stop_lane >= LOOKAHEAD_WPS:
+            # we can not plan for waypoints more far away then the LOOKAHEAD_WPS
+            return
+
         for current_wp_number_in_next_wps_array in range(number_of_wps_between_car_and_stop_lane):
             number_of_wp_until_stop = number_of_wps_between_car_and_stop_lane
             desired_wp_vel = self._calculate_decreasing_velocity(number_of_wp_until_stop,
@@ -170,18 +202,21 @@ class WaypointUpdater(object):
                                        current_wp_number_in_next_wps_array,
                                        max(desired_wp_vel, 0))
 
-        # from the stop_waypoint we stoped ahead from we should also stop
-        for i in range(number_of_wps_between_car_and_stop_lane, STOP_AHEAD_WPS):
-            self.set_waypoint_velocity(self.next_n_waypoints,
-                                       self.stop_waypoint_idx_for_traffic_light - self.car_wp_idx - i, 0)
-
     def _calculate_decreasing_velocity(self, number_of_wps_until_stop_lane, wp_number_in_next_wps):
-        """"""
+        """
+        Calculates the velocity at the waypoints if the velocity must be decreased.
+        Here this is only for traffic lights.
+        :param number_of_wps_until_stop_lane: number of waypoints until stop lane.
+        :param wp_number_in_next_wps: index of the waypoint to calculate the velocity for, in the next_n_waypoints array.
+        :return: velocity for the waypoint at the index "wp_number_in_next_wps"
+        """
         decrement_step = self.current_vel / number_of_wps_until_stop_lane
         return decrement_step * (number_of_wps_until_stop_lane - wp_number_in_next_wps)
 
     def _publish_next_waypoints(self):
-        """"""
+        """
+        Publishes planed waypoints in next_n_waypoints list.
+        """
         self.final_waypoints_pub.publish(Lane(waypoints=self.next_n_waypoints))
 
     def waypoints_cb(self, waypoints):
@@ -196,7 +231,7 @@ class WaypointUpdater(object):
         """
         Finds the waypoint in front of the car in the list of waypoints.
         This method assumes that the car is oriented towards tex direction of the coordinate frame.
-        :return: the wp in front of the car
+        :return: wp in front of the car
         """
         # find closest wp to the car where wp.x > car_pos_x
         closest_idx = self.car_wp_idx
@@ -205,14 +240,14 @@ class WaypointUpdater(object):
 
         if self.car_wp_idx is not None:
             closest_dist = self._wp_car_dist(self.base_waypoints.waypoints[self.car_wp_idx])
-            next_wp_idx = (self.car_wp_idx + i) % self.base_waypoints_length
+            next_wp_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints.waypoints, self.car_wp_idx + i)
             next_wp_car_dist = self._wp_car_dist(self.base_waypoints.waypoints[next_wp_idx])
             while closest_dist > next_wp_car_dist:
                 closest_dist = next_wp_car_dist
                 i += 1
-                next_wp_idx = (self.car_wp_idx + i) % self.base_waypoints_length
+                next_wp_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints.waypoints, self.car_wp_idx + i)
                 next_wp_car_dist = self._wp_car_dist(self.base_waypoints.waypoints[next_wp_idx])
-                closest_idx = (self.car_wp_idx + i) % self.base_waypoints_length
+                closest_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints.waypoints, self.car_wp_idx + i)
         else:
             # initial search in all the waypoints
             for idx, wp in enumerate(self.base_waypoints.waypoints):
@@ -230,8 +265,7 @@ class WaypointUpdater(object):
         :return: dist between wp and car
         """
         return math.sqrt((wp.pose.pose.position.x - self.car_pos[0]) ** 2 +
-                         (wp.pose.pose.position.y - self.car_pos[1]) ** 2 +
-                         (wp.pose.pose.position.z - self.car_pos[2]) ** 2)
+                         (wp.pose.pose.position.y - self.car_pos[1]) ** 2)
 
     def traffic_cb(self, msg):
         """
