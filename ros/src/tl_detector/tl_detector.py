@@ -145,7 +145,7 @@ class TLDetector(object):
     def get_waypoint_distance(self, wp_idx1, wp_idx2):
         """
         Calculates the the shortest distance between wp1 and wp2. Distance is measured as accumulated distance between the waypoints 
-        traversing from wp1 to wp2. This assumes the waypoints form a closes loop. If the distance is negative, wp_idx2 is behind wp_idx1.
+        traversing from wp1 to wp2. This assumes the waypoints form a closed loop. If the distance is negative, wp_idx2 is behind wp_idx1.
 
          Args:
             wp_idx1 (int): waypoint index of start point
