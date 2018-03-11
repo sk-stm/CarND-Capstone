@@ -11,8 +11,10 @@ class TLClassifier(object):
     def __init__(self):
         rospack = rospkg.RosPack()
         self.path = os.path.join(rospack.get_path('tl_detector'), "sim_data")
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
         f = open(os.path.join(self.path, 'labels.csv'), 'wb')
-        self.writer=csv.writer(f)
+        self.writer = csv.writer(f)
         self.num_files = 0
         self.last_light = None
 

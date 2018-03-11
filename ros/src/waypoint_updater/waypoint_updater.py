@@ -52,6 +52,10 @@ class WaypointUpdater(object):
         rospy.spin()
 
     def _get_current_vel(self, curr_vel_twisted_stamped):
+        """
+        Sets the current velocity from the ros message to a local attribute.
+        :param curr_vel_twisted_stamped: current velocity of the car as ros message
+        """
         self.current_vel = curr_vel_twisted_stamped.twist.linear.x
 
     def pose_cb(self, msg):
@@ -69,11 +73,16 @@ class WaypointUpdater(object):
             self._publish_next_waypoints()
 
     def _calculate_next_waypoints(self):
+        """
+        Calulates the waypoints to follow. Also includes the traffic light in front of the car into the behaviour.
+        """
         self._calculate_next_waypoints_without_traffic_light()
         self._include_traffic_light_behaviour()
 
     def _calculate_next_waypoints_without_traffic_light(self):
-        """"""
+        """
+        Plans the next waypoints without taking the traffic lights into account.
+        """
         self.car_wp_idx = self._find_wp_in_front_of_car()
 
         if not self.next_n_waypoints or self.continue_driving_from_traffic_light:
@@ -131,8 +140,8 @@ class WaypointUpdater(object):
         """
         Returns the index in a waypoint list assuming the list is arranged in a circle. So if the given index
         exeeds the length of the array, it starts to count at the beginning again.
-        :param waypoint_list: the list to get the index in
-        :param idx: the index to retrieve
+        :param waypoint_list: list to get the index in
+        :param idx: index to retrieve
         :return: index in the array.
         """
         return idx % len(waypoint_list)
@@ -199,7 +208,7 @@ class WaypointUpdater(object):
         Here this is only for traffic lights.
         :param number_of_wps_until_stop_lane: number of waypoints until stop lane.
         :param wp_number_in_next_wps: index of the waypoint to calculate the velocity for, in the next_n_waypoints array.
-        :return: the velocity for the waypoint at the index "wp_number_in_next_wps"
+        :return: velocity for the waypoint at the index "wp_number_in_next_wps"
         """
         decrement_step = self.current_vel / number_of_wps_until_stop_lane
         return decrement_step * (number_of_wps_until_stop_lane - wp_number_in_next_wps)
@@ -222,7 +231,7 @@ class WaypointUpdater(object):
         """
         Finds the waypoint in front of the car in the list of waypoints.
         This method assumes that the car is oriented towards tex direction of the coordinate frame.
-        :return: the wp in front of the car
+        :return: wp in front of the car
         """
         # find closest wp to the car where wp.x > car_pos_x
         closest_idx = self.car_wp_idx
