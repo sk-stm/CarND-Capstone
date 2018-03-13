@@ -15,7 +15,7 @@ class TLClassifier(object):
         self.last_light = None
 
         # TODO need to be more robust, perhaps use a ros parameter instead
-        self.gen_train_data = True
+        self.gen_train_data = False
         
         if self.gen_train_data:
             self.num_files = 0
@@ -47,7 +47,7 @@ class TLClassifier(object):
         lstate = light['light'].state
 
         # Reduce image to to 1/4 size
-        # rs_image = cv2.resize(image, None, fx=0.5, fy=0.5)
+        rs_image = cv2.resize(image, None, fx=0.5, fy=0.5)
         
 
         if self.gen_train_data:
@@ -56,7 +56,7 @@ class TLClassifier(object):
 
             if not self.last_light or abs(self.last_light['distance'] - light['distance']) > 1:
                 filename = "tl_%05d.png" % self.num_files
-                cv2.imwrite(os.path.join(self.path, filename), image)
+                cv2.imwrite(os.path.join(self.path, filename), rs_image)
                 rospy.logdebug("Writing image to %s", filename)
                 self.writer.writerow([filename, lstate])
                 self.last_light = light
@@ -65,7 +65,7 @@ class TLClassifier(object):
             return lstate
 
         else:
-            image_array = np.asarray(image)
+            image_array = np.asarray(rs_image)
             # rospy.loginfo("Calling model prediction image shape %s", np.shape(image_array))
             with self.graph.as_default():
                 light_predict = self.model.predict(image_array[None,:,:,:], batch_size=1)
