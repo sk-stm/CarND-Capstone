@@ -30,6 +30,8 @@ that we have created in the `__init__` function.
 
 '''
 
+LOOP_RATE = 50
+
 class DBWNode(object):
     def __init__(self):
         rospy.init_node('dbw_node')
@@ -60,9 +62,8 @@ class DBWNode(object):
                                          BrakeCmd, queue_size=1)
 
         # Create `Controller` object
-        self.contoller = Controller(vehicle_mass, fuel_capacity, wheel_radius,
-                                    decel_limit, accel_limit, max_steer_angle,
-                                    wheel_base, steer_ratio, max_lat_accel)
+        self.contoller = Controller(vehicle_mass, fuel_capacity, wheel_radius, decel_limit, accel_limit, max_steer_angle,
+                                    wheel_base, steer_ratio, max_lat_accel, LOOP_RATE)
 
         # Subscribe to all the topics you need to
         rospy.Subscriber('/twist_cmd', TwistStamped, self._get_twist_cmd)
@@ -83,7 +84,7 @@ class DBWNode(object):
         self._des_ang_vel = desired_speeds.twist.angular.z
 
     def loop(self):
-        rate = rospy.Rate(50) # 50Hz
+        rate = rospy.Rate(LOOP_RATE)  # LOOP_RATE Hz
         while not rospy.is_shutdown():
             # Get predicted throttle, brake, and steering using `twist_controller`
             # You should only publish the control commands if dbw is enabled

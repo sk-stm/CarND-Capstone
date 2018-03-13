@@ -1,6 +1,15 @@
 *.py[cod]
+.idea
+ros/src/tl_detector/sim_data/
 
 build
 devel
+logs
+.catkin_tools
 
 profile.tmp
+ENV
+
+**/src/dataspeed_can/
+**/src/dbw_mkz_ros
+**/src/lusb

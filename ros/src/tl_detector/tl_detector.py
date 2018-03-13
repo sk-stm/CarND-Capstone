@@ -9,8 +9,8 @@ from cv_bridge import CvBridge
 from light_classification.tl_classifier import TLClassifier
 import tf
 import cv2
+import numpy as np
 import yaml
-import math
 
 STATE_COUNT_THRESHOLD = 3
 
@@ -22,10 +22,8 @@ class TLDetector(object):
         self.waypoints = None
         self.camera_image = None
         self.lights = []
-        self.stop_line_wp_idx = -1
-        self._old_dist_betw_tl_and_car = float("inf")
-        self._curr_dist_car_tl = float("inf")
-        self._closest_tl_idx = 0
+        self.use_ground_truth = rospy.get_param("~use_ground_truth", default=False)
+        self.tl_consideration_distance = rospy.get_param("/tl_consideration_distance",  100)
 
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
@@ -53,19 +51,41 @@ class TLDetector(object):
         self.last_state = TrafficLight.UNKNOWN
         self.last_wp = -1
         self.state_count = 0
-        self.tl_wp_idx_ahead = None
-        self.last_tl_idx_ahead = None
 
         rospy.spin()
 
     def pose_cb(self, msg):
-        self.pose = msg.pose
+        self.pose = msg
 
-    def waypoints_cb(self, msg):
-        # waypoints_cb should be called just once
-        if self.waypoints != None:
-            rospy.logwarn("base_waypoints message received again.")
-        self.waypoints = msg.waypoints
+    def waypoints_cb(self, waypoints):
+        self.waypoints = waypoints
+
+        """
+        # test get_waypoint_distance method
+        idx1 = 0
+        idx2 = 5
+        rospy.logerr("distance between %d and %d: %f", idx1, idx2, self.get_waypoint_distance(idx1, idx2))
+
+        idx1 = 5
+        idx2 = 0
+        rospy.logerr("distance between %d and %d: %f", idx1, idx2, self.get_waypoint_distance(idx1, idx2))
+
+        idx1 = 50
+        idx2 = 60
+        rospy.logerr("distance between %d and %d: %f", idx1, idx2, self.get_waypoint_distance(idx1, idx2))
+
+        idx1 = 60
+        idx2 = 50
+        rospy.logerr("distance between %d and %d: %f", idx1, idx2, self.get_waypoint_distance(idx1, idx2))
+
+        idx1 = len(self.waypoints.waypoints) - 50
+        idx2 = 50
+        rospy.logerr("distance between %d and %d: %f", idx1, idx2, self.get_waypoint_distance(idx1, idx2))
+
+        idx1 = 50
+        idx2 = len(self.waypoints.waypoints) - 50
+        rospy.logerr("distance between %d and %d: %f", idx1, idx2, self.get_waypoint_distance(idx1, idx2))
+        """
 
     def traffic_cb(self, msg):
         self.lights = msg.lights
@@ -100,71 +120,72 @@ class TLDetector(object):
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
         self.state_count += 1
 
-    def get_closest(self, wpts, position):
+    # TODO: move into common package (might be cool to create a map-class: map = Map(waypoints), map.get_waypoint_distance(..))
+    def get_closest_waypoint_idx(self, pose):
         """Identifies the closest path waypoint to the given position
             https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
         Args:
-            position (Position): position to match a waypoint to
+            pose (Pose): position to match a waypoint to
 
         Returns:
             int: index of the closest waypoint in self.waypoints
 
         """
-        # find closest wp to the car where wp.x > car_pos_x
         closest_idx = 0
         closest_dist = float("inf")
-        for idx, wp in enumerate(wpts):
-            curr_dist = self._calc_dist(wp.pose.pose.position, position)
+        for idx, wp in enumerate(self.waypoints.waypoints):
+            curr_dist = np.sqrt((wp.pose.pose.position.x - pose.position.x)**2 + (wp.pose.pose.position.y - pose.position.y)**2)
             if curr_dist < closest_dist:
                 closest_idx = idx
                 closest_dist = curr_dist
 
-        return closest_idx, closest_dist
+        return closest_idx
 
-    def _calc_wp_dist(self, idx1, idx2):
+    # TODO: move into common package (might cool to create a map-class: map = Map(waypoints), map.get_waypoint_distance(..))
+    def get_waypoint_distance(self, wp_idx1, wp_idx2):
         """
-        Calculates the distance between waypoints in the waypoints list attribute.
-        :param idx1: index of the first waypoint in the list.
-        :param idx2: index of the second waypoint in the list.
-        :return: distance between the two waypoints
-        """
-        return self._calc_dist(self.waypoints[idx1].pose.pose.position,
-                               self.waypoints[idx2].pose.pose.position)
+        Calculates the the shortest distance between wp1 and wp2. Distance is measured as accumulated distance between the waypoints 
+        traversing from wp1 to wp2. This assumes the waypoints form a closed loop. If the distance is negative, wp_idx2 is behind wp_idx1.
 
-    def _calc_tl_wp_dist(self, tl_idx, wp_idx):
-        """
-        Calculates the distance between a traffic ligt position and a waypoint
-        :param tl_idx: index of the traffic light in the traffic light list.
-        :param wp_idx: index of the waypoint in the waypoint list
-        :return: distance between the two points
-        """
-        return self._calc_dist(self.lights[tl_idx].pose.pose.position,
-                               self.waypoints[wp_idx].pose.pose.position)
+         Args:
+            wp_idx1 (int): waypoint index of start point
+            wp_idx2 (int): waypoint index of end point
 
-    def _calc_dist(self, position, position2):
+        Returns:
+            float: signed sortest distance between wp1 and wp2 on the waypoints loop
         """
-        Calculates the distance of a waypoint to the current position of the car
-        :param position: position do calc the dist between
-        :param position": second position to calc the dist between
-        :return: dist between position and position2
-        """
-        return math.sqrt((position.x - position2.x) ** 2 +
-                         (position.y - position2.y) ** 2 +
-                         (position.z - position2.z) ** 2)
+        assert wp_idx1 >= 0 and wp_idx2 >= 0 and wp_idx1 < len(self.waypoints.waypoints) and wp_idx2 < len(self.waypoints.waypoints)
 
-    def _calc_dist_2d(self, px, py, wp_idx):
-        """
-        Calculates the disttance in 2D (X,Y) of a point in the world(px, py) and a waypoint in the waypoint list.
-        :param px: x coordinate of the point
-        :param py: y coordinate of the point
-        :param wp_idx: index of the waypoint in the waypoint list
-        :return: distance between the point and waypoint
-        """
-        return math.sqrt(
-            (px - self.waypoints[wp_idx].pose.pose.position.x) ** 2 +
-            (py - self.waypoints[wp_idx].pose.pose.position.y) ** 2)
+        distance = 0
+        # the signed index-distance
+        idx_dist = wp_idx2 - wp_idx1
 
+        # handle the cases where we measure over the beginning of the waypoints loop
+        # such that we return always the shortes distance on the loop
+        if idx_dist < -len(self.waypoints.waypoints) / 2:
+            idx_dist = len(self.waypoints.waypoints) + idx_dist
+        elif idx_dist > len(self.waypoints.waypoints) / 2:
+            idx_dist = -len(self.waypoints.waypoints) + idx_dist
+        
+        # the direction (forward vs. backwards)
+        dir = np.sign(idx_dist)
+        if dir < 0:
+            wp_idx1, wp_idx2 = wp_idx2, wp_idx1
 
+        
+        idx = wp_idx1
+        while idx != wp_idx2:
+            p1 = self.waypoints.waypoints[idx].pose.pose.position
+            p2 = self.waypoints.waypoints[idx+1].pose.pose.position
+            dist = np.sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2)
+            distance += dist
+            
+            idx += 1
+            if idx + 1 >= len(self.waypoints.waypoints):
+                idx = 0
+
+        return distance * dir
+    
     def get_light_state(self, light):
         """Determines the current color of the traffic light
 
@@ -175,101 +196,17 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
+        if(self.use_ground_truth):
+            return light['light'].state
+
         if(not self.has_image):
-            self.prev_light_loc = None
-            return False
+            rospy.logwarn("Waiting for TL camera image ..")
+            return TrafficLight.UNKNOWN
 
+
+        #Get classification
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
-
-        # TODO Get classification
-        #return self.light_classifier.get_classification(cv_image)
-        return light.state
-
-    def _find_waypoint_next_to_tl(self, search_idx, tl_idx):
-        """
-        Finds the nearest waypoint to a traffic light
-        :param search_idx: waypoint index to start searching at
-        :param tl_idx: index of the closest traffic light (in the traffic light array)
-        :return: closest waypoint to the traffic light, index of the nearest waypoint
-        """
-        best_wp_tl_dist = float("inf")
-        curr_wp_tl_dist = self._calc_tl_wp_dist(tl_idx=tl_idx, wp_idx=search_idx)
-        i = 1
-        while curr_wp_tl_dist < best_wp_tl_dist:
-            best_wp_tl_dist = curr_wp_tl_dist
-            curr_wp_tl_dist = self._calc_tl_wp_dist(tl_idx=tl_idx, wp_idx=search_idx + i)
-            i += 1
-
-        return search_idx + i
-
-    def find_wp_for_stopline_to_next_tl(self, stop_line_pos, light_wp_idx):
-        """
-        Finds the waypoint nearest to the stop line that belongs to the traffic light near the with the given
-         waypoint index.
-        :param stop_line_pos: position of the stop line
-        :param light_wp_idx: waypoint of the traffic light
-        :return: index of the waypoint next to the stop line
-        """
-        i = 0
-        min_dist = float("inf")
-        stop_line_wp_dist = 1
-        wp_idx = 0
-        while stop_line_wp_dist <= min_dist:
-            stop_line_wp_dist = self._calc_dist_2d(stop_line_pos[0], stop_line_pos[1], light_wp_idx + i)
-            if stop_line_wp_dist < min_dist:
-                min_dist = stop_line_wp_dist
-                wp_idx = light_wp_idx + i
-                i -= 1
-
-        return wp_idx
-
-    def _get_next_tl_along_waypoints(self, car_wp_idx, stop_line_positions):
-        """
-        Search for next traffic light along the waypoints starting at the position of the car.
-        This method assumes that all traffic lights in the traffic light list are relevant for the car.
-        But it assumes nothing about the order or location of the traffic lights and might be overhead if the traffic
-        lights are ordered along the waypoints.
-        :param car_wp_idx:
-        :return:
-        """
-        i = 1
-        closest_tl_idx = self._closest_tl_idx
-        current_closest_tl_idx = closest_tl_idx
-        while closest_tl_idx == current_closest_tl_idx:
-            # search along waypoints until another traffic light is found
-            closest_tl_idx, closest_tl_dist = self.get_closest(self.lights,
-                                                               self.waypoints[car_wp_idx + i].pose.pose.position)
-            i += 1
-        light_wp_idx = self._find_waypoint_next_to_tl(car_wp_idx + i, closest_tl_idx)
-        # this assumes that the traffic lights and stop lines have the same index in the array
-        stop_line_wp_idx = self.find_wp_for_stopline_to_next_tl(stop_line_positions[closest_tl_idx], light_wp_idx)
-
-        return light_wp_idx, closest_tl_idx, stop_line_wp_idx
-
-    def _get_closest_tl_ahead_of_car(self, car_wp_idx, stop_line_positions):
-        """
-        Gets the closest traffic light in front of the car. This method assumes, that all traffic lights
-        in the traffic lights array are facing the car.
-        :param car_wp_idx: waypoint index next to the car
-        :return: traffic light ahead of the car (might not be seen yet)
-        """
-        closest_tl_idx, closest_tl_dist = self.get_closest(self.lights, self.waypoints[car_wp_idx].pose.pose.position)
-
-        # test if closest traffic light is in front of car
-        nearer_wp_dist = self._calc_tl_wp_dist(tl_idx=closest_tl_idx, wp_idx=car_wp_idx+1)
-        if nearer_wp_dist < closest_tl_dist:
-            # the traffic light is in front of the car
-            # find waypoint near the closest traffic light ahead of the car
-            light_wp_idx = self._find_waypoint_next_to_tl(car_wp_idx, closest_tl_idx)
-            # this assumes that the traffic lights and stop lines have the same index in the array
-            stop_line_wp_idx = self.find_wp_for_stopline_to_next_tl(stop_line_positions[closest_tl_idx], light_wp_idx)
-        else:
-            # nearest traffic light is behind the car
-            light_wp_idx, \
-            closest_tl_idx, \
-            stop_line_wp_idx = self._get_next_tl_along_waypoints(car_wp_idx, stop_line_positions)
-
-        return light_wp_idx, closest_tl_idx, stop_line_wp_idx
+        return self.light_classifier.get_classification(light, cv_image)
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
@@ -280,52 +217,61 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        light = None
+        if not self.pose or not self.waypoints or not self.lights:
+            rospy.loginfo_throttle(5, "waiting for pose or waypoints callback")
+            return -1, TrafficLight.UNKNOWN
 
-        # List of positions that correspond to the line to stop in front of for a given intersection
-        stop_line_positions = self.config['stop_line_positions']
-        if self.pose is not None and self.waypoints is not None:
-            car_wp_idx, _ = self.get_closest(self.waypoints, self.pose.position)
+        if not self.lights or not len(self.lights):
+            rospy.loginfo_throttle(5, "waiting for current TL annotations")
+            return -1, TrafficLight.UNKNOWN
 
-            # TODO find the closest visible traffic light (if one exists)
+        # find the wp idx of the vehicle
+        car_closest_wp_idx = self.get_closest_waypoint_idx(self.pose.pose)
+        rospy.logdebug("Closest wp to the car's position is %d", car_closest_wp_idx)
 
-            # TODO This code seems rather complicated. Is that necessary?
-            if self.lights:
-                if not self.tl_wp_idx_ahead:
-                    # initial search for next traffic light
-                    next_tl_wp_idx, \
-                    next_tl_idx, \
-                    stop_line_wp_idx = self._get_closest_tl_ahead_of_car(car_wp_idx, stop_line_positions)
-                    self.tl_wp_idx_ahead = next_tl_wp_idx
-                    self._closest_tl_idx = next_tl_idx
-                    self.stop_line_wp_idx = stop_line_wp_idx
+        # find the wp idx of the lights and their distance to the car
+        relevant_lights = []
+        for idx,l in enumerate(self.lights):
+            # find the corresponding stop-line (this assumes that the traffic lights and stop lines have the same index in the arrays)
+            tl_stop_line_pose = Pose()
+            tl_stop_line_pose.position.x = self.config['stop_line_positions'][idx][0]
+            tl_stop_line_pose.position.y = self.config['stop_line_positions'][idx][1]
+            
+            # find closest wp to stop-line
+            tl_stop_line_wp_idx = self.get_closest_waypoint_idx(tl_stop_line_pose)
+            distance_to_car     = self.get_waypoint_distance(car_closest_wp_idx, tl_stop_line_wp_idx)
 
-                # regularly update distance between car an traffic light
-                self._curr_dist_car_tl = self._calc_wp_dist(self.tl_wp_idx_ahead, car_wp_idx)
+            # only consider TLs in front of the car's position, and ones not too far ahead
+            if distance_to_car < 0 or distance_to_car > self.tl_consideration_distance:
+                rospy.logdebug("Ignoring TL, its behind the car or too far ahead (%.2fm)", distance_to_car)
+                continue
 
-                if self._curr_dist_car_tl > self._old_dist_betw_tl_and_car:
-                    # search for next traffic if the car passed the traffic light
-                    next_tl_wp_idx, \
-                    next_tl_idx, \
-                    stop_line_wp_idx = self._get_next_tl_along_waypoints(car_wp_idx, stop_line_positions)
-                    self.tl_wp_idx_ahead = next_tl_wp_idx
-                    self._closest_tl_idx = next_tl_idx
-                    self.stop_line_wp_idx = stop_line_wp_idx
-                    # calc new distance because waypoint to traffic light changed
-                    self._curr_dist_car_tl = self._calc_wp_dist(self.tl_wp_idx_ahead, car_wp_idx)
+            tl = {
+                'light': l,
+                'stop_line_wp_idx': tl_stop_line_wp_idx,
+                'distance': distance_to_car,
+                'state': None
+            } 
+            relevant_lights.append(tl)
 
-                # TODO set this number somewhere else
-                if self._curr_dist_car_tl <= 50 + 25:
-                    # if traffic light is 100 meter away
-                    light = self.lights[self._closest_tl_idx]
+        # check if we have any relevant TLs ahead
+        if not len(relevant_lights):
+            rospy.logdebug("No relevant TL found")
+            return -1, TrafficLight.UNKNOWN
+        
 
-                self._old_dist_betw_tl_and_car = self._curr_dist_car_tl
+        # sort by distance and select the closes one
+        relevant_lights.sort(key=lambda x: x['distance'])
+        next_relevant_tl = relevant_lights[0]
+        rospy.logdebug("Next relevant TL is %.2fm ahead at wp %d.", next_relevant_tl['distance'], next_relevant_tl['stop_line_wp_idx'])
 
-                if light:
-                    state = self.get_light_state(light)
-                    return self.stop_line_wp_idx, state
 
-        return -1, TrafficLight.UNKNOWN
+        # find its state
+        next_relevant_tl['state'] = self.get_light_state(next_relevant_tl)
+
+
+        return next_relevant_tl['stop_line_wp_idx'], next_relevant_tl['state']
+
 
 if __name__ == '__main__':
     try:
