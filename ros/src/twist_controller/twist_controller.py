@@ -1,6 +1,7 @@
 from pid import PID
 from yaw_controller import YawController
 from lowpass import LowPassFilter
+from cplotter import Cplotter
 
 GAS_DENSITY = 2.858
 ONE_MPH = 0.44704
@@ -28,7 +29,7 @@ class Controller(object):
                                              max_lat_accel, max_steer_angle)
 
         self.lpf_steering = LowPassFilter(tau=2, ts=5)
-
+        self.cplotter = Cplotter()
 
     def control(self, proposed_lin_vel, proposed_ang_vel, current_lin_vel):
         steering_angle = self._yaw_controller.get_steering(proposed_lin_vel,
@@ -45,5 +46,7 @@ class Controller(object):
             throttle = 0
             brake = self.max_brake * vel_cmd
 
+        self.cplotter.add_plpoint(proposed_lin_vel, current_lin_vel)
+        self.cplotter.update()
         # Return throttle, brake, steer
         return throttle, brake, final_steering_angle
