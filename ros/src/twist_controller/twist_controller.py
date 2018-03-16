@@ -18,8 +18,8 @@ class Controller(object):
         # Implement the PID controller for the throttle and brake combined.
         # For positive values of control, the throttle will be used.
         # For negative values of control, it will be converted to brake.
-        v_kp = 0.1
-        v_ki = 0.02
+        v_kp = 0.2
+        v_ki = 0.002
         v_kd = 0.005
         self.vel_pid = PID(kp=v_kp, ki=v_ki, kd=v_kd, mn=-1.0, mx=1.0)
         self.max_brake = decel_limit * mass * wheel_radius

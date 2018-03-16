@@ -175,14 +175,15 @@ class TLDetector(object):
         
         idx = wp_idx1
         while idx != wp_idx2:
+            if idx + 1 >= len(self.waypoints.waypoints):
+                idx = 0
+
             p1 = self.waypoints.waypoints[idx].pose.pose.position
             p2 = self.waypoints.waypoints[idx+1].pose.pose.position
             dist = np.sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2)
             distance += dist
             
             idx += 1
-            if idx + 1 >= len(self.waypoints.waypoints):
-                idx = 0
 
         return distance * dir
     
@@ -268,7 +269,6 @@ class TLDetector(object):
 
         # find its state
         next_relevant_tl['state'] = self.get_light_state(next_relevant_tl)
-
 
         return next_relevant_tl['stop_line_wp_idx'], next_relevant_tl['state']
 
