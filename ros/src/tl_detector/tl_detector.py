@@ -1,16 +1,13 @@
 #!/usr/bin/env python
 import rospy
-
-from light_classification.tl_classifier import TLClassifier
-
 from std_msgs.msg import Int32
 from geometry_msgs.msg import PoseStamped, Pose
 from styx_msgs.msg import TrafficLightArray, TrafficLight
 from styx_msgs.msg import Lane
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
-from message_filters import ApproximateTimeSynchronizer, Subscriber
-
+from light_classification.tl_classifier import TLClassifier
+import tf
 import cv2
 import numpy as np
 import yaml
@@ -25,20 +22,8 @@ class TLDetector(object):
         self.waypoints = None
         self.camera_image = None
         self.lights = []
-        self.state = TrafficLight.UNKNOWN
-        self.last_state = TrafficLight.UNKNOWN
-        self.last_wp = -1
-        self.state_count = 0
-        self.bridge = CvBridge()
-        self.light_classifier = TLClassifier()
-
-        self.use_ground_truth = rospy.get_param("~use_ground_truth", default=True)
+        self.use_ground_truth = rospy.get_param("~use_ground_truth", default=False)
         self.tl_consideration_distance = rospy.get_param("/tl_consideration_distance",  100)
-
-        config_string = rospy.get_param("/traffic_light_config")
-        self.config = yaml.load(config_string)
-
-        self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
@@ -50,11 +35,23 @@ class TLDetector(object):
         simulator. When testing on the vehicle, the color state will not be available. You'll need to
         rely on the position of the light and the camera image to predict it.
         '''
-        self.tss = ApproximateTimeSynchronizer([Subscriber("/vehicle/traffic_lights", TrafficLightArray),
-                                               Subscriber("/image_color", Image)], 30, 0.1)
-        self.tss.registerCallback(self.image_cb)
+        sub3 = rospy.Subscriber('/vehicle/traffic_lights', TrafficLightArray, self.traffic_cb)
+        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
 
-        
+        config_string = rospy.get_param("/traffic_light_config")
+        self.config = yaml.load(config_string)
+
+        self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
+
+        self.bridge = CvBridge()
+        self.light_classifier = TLClassifier()
+        self.listener = tf.TransformListener()
+
+        self.state = TrafficLight.UNKNOWN
+        self.last_state = TrafficLight.UNKNOWN
+        self.last_wp = -1
+        self.state_count = 0
+
         rospy.spin()
 
     def pose_cb(self, msg):
@@ -64,7 +61,7 @@ class TLDetector(object):
         self.waypoints = waypoints
 
         """
-        # test get_waypoint_distance method; TODO: move into rostest
+        # test get_waypoint_distance method
         idx1 = 0
         idx2 = 5
         rospy.logerr("distance between %d and %d: %f", idx1, idx2, self.get_waypoint_distance(idx1, idx2))
@@ -90,19 +87,19 @@ class TLDetector(object):
         rospy.logerr("distance between %d and %d: %f", idx1, idx2, self.get_waypoint_distance(idx1, idx2))
         """
 
-    def image_cb(self, traffic_lights_msg, image_msg):
+    def traffic_cb(self, msg):
+        self.lights = msg.lights
+
+    def image_cb(self, msg):
         """Identifies red lights in the incoming camera image and publishes the index
             of the waypoint closest to the red light's stop line to /traffic_waypoint
 
         Args:
-            traffic_lights_msg (TrafficLightArray): image from car-mounted camera
-            image_msg (Image):                      image from car-mounted camera
+            msg (Image): image from car-mounted camera
 
         """
-        self.lights = traffic_lights_msg.lights
-        self.camera_image = image_msg
         self.has_image = True
-
+        self.camera_image = msg
         light_wp, state = self.process_traffic_lights()
 
         '''
@@ -124,7 +121,6 @@ class TLDetector(object):
         self.state_count += 1
 
     # TODO: move into common package (might be cool to create a map-class: map = Map(waypoints), map.get_waypoint_distance(..))
-    # TODO: in simulation, this takes a non-trivial amount of resources and slowes down the whole pipeline
     def get_closest_waypoint_idx(self, pose):
         """Identifies the closest path waypoint to the given position
             https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
@@ -138,12 +134,10 @@ class TLDetector(object):
         closest_idx = 0
         closest_dist = float("inf")
         for idx, wp in enumerate(self.waypoints.waypoints):
-            dx = wp.pose.pose.position.x - pose.position.x
-            dy = wp.pose.pose.position.y - pose.position.y
-            dist = dx*dx + dy*dy
-            if dist < closest_dist:
+            curr_dist = np.sqrt((wp.pose.pose.position.x - pose.position.x)**2 + (wp.pose.pose.position.y - pose.position.y)**2)
+            if curr_dist < closest_dist:
                 closest_idx = idx
-                closest_dist = dist
+                closest_dist = curr_dist
 
         return closest_idx
 
@@ -182,12 +176,12 @@ class TLDetector(object):
         idx = wp_idx1
         while idx != wp_idx2:
             p1 = self.waypoints.waypoints[idx].pose.pose.position
-            p2 = self.waypoints.waypoints[(idx+1) % len(self.waypoints.waypoints)].pose.pose.position
+            p2 = self.waypoints.waypoints[idx+1].pose.pose.position
             dist = np.sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2)
             distance += dist
             
             idx += 1
-            if idx >= len(self.waypoints.waypoints):
+            if idx + 1 >= len(self.waypoints.waypoints):
                 idx = 0
 
         return distance * dir
@@ -264,7 +258,7 @@ class TLDetector(object):
         if not len(relevant_lights):
             rospy.logdebug("No relevant TL found")
             return -1, TrafficLight.UNKNOWN
-
+        
 
         # sort by distance and select the closes one
         relevant_lights.sort(key=lambda x: x['distance'])
