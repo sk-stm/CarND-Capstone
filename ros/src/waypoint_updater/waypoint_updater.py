@@ -163,22 +163,15 @@ class WaypointUpdater(object):
                 self.seeing_red_light = False
                 self.continue_driving_from_traffic_light = True
                 self.already_planed_to_stop = False
-            rospy.loginfo("waypoint_updater: breaking: start to drive")
             return
-
-        rospy.loginfo("waypoint_updater: stop_waypoint_idx: %s", self.stop_waypoint_idx_for_traffic_light)
-        rospy.loginfo("waypoint_updater: red traffic light detected")
 
         self.seeing_red_light = True
         self.car_wp_idx = self._find_wp_in_front_of_car()
 
         if self.car_wp_idx < self.stop_waypoint_idx_for_traffic_light:
-            rospy.loginfo("waypoint_updater: red traffic light in front of the car")
             if not self.already_planed_to_stop:
-                rospy.loginfo("waypoint_updater: planing to stop the car")
                 self._plan_stop_wps(self.stop_waypoint_idx_for_traffic_light)
             else:
-                rospy.loginfo("waypoint_updater: updating the stoping point")
                 self._update_next_waypoints(next_n_waypoints=self.next_n_waypoints,
                                             next_n_waypoint_glob_idxs=self.next_n_waypoint_glob_idxs,
                                             car_wp_idx=self.car_wp_idx)
@@ -196,11 +189,6 @@ class WaypointUpdater(object):
         """
         # the stop lane is still in front of us
         number_of_wps_between_car_and_stop_lane = stop_waypoint_idx_for_traffic_light - self.car_wp_idx
-
-        rospy.loginfo("waypoint_updater: breaking: car_wp: %s, stoping at: %s between_car_stop_lane: %s",
-                      self.car_wp_idx,
-                      stop_waypoint_idx_for_traffic_light,
-                      number_of_wps_between_car_and_stop_lane)
 
         if self.already_planed_to_stop:
             # if we planed until the stop lane we must not change the plan
@@ -223,10 +211,6 @@ class WaypointUpdater(object):
             self.set_waypoint_velocity(self.next_n_waypoints,
                                        current_wp_number_in_next_wps_array,
                                        max(desired_wp_vel, 0))
-            rospy.loginfo("waypoint_updater: breaking: current_vel: %s, desired vel: %s, wp_to set: %s",
-                          self.current_vel,
-                          max(desired_wp_vel, 0),
-                          current_wp_number_in_next_wps_array)
 
         if number_of_wps_between_car_and_stop_lane < LOOKAHEAD_WPS:
             # if we can plan until the stop lane, the planing is finished
