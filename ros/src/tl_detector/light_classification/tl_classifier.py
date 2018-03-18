@@ -26,7 +26,7 @@ class TLClassifier(object):
             self.writer = csv.writer(f)
         else:
             # TODO need to add check that the model is compatible with current keras version
-            self.model = keras.models.load_model("/home/shinchan/Udacity/term3/myRepos/AshoksCode/model.h5")
+            self.model = keras.models.load_model("model.h5")
             self.model._make_predict_function()
             rospy.loginfo("keras model loaded")
             self.graph = tf.get_default_graph()
@@ -46,8 +46,8 @@ class TLClassifier(object):
         lstate = light['light'].state
 
         # Reduce image to to 1/4 size
-        rs_image = cv2.resize(image, None, fx=0.5, fy=0.5)
-        #rs_image = image
+        #rs_image = cv2.resize(image, None, fx=0.5, fy=0.5)
+        rs_image = image
         
 
         if self.gen_train_data:

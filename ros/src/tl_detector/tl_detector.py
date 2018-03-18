@@ -31,7 +31,7 @@ class TLDetector(object):
         self.state_count = 0
         self.bridge = CvBridge()
 
-        self.use_ground_truth = rospy.get_param("~use_ground_truth", default=True)
+        self.use_ground_truth = rospy.get_param("~use_ground_truth", default=False)
         self.tl_consideration_distance = rospy.get_param("/tl_consideration_distance",  100)
 
         config_string = rospy.get_param("/traffic_light_config")
