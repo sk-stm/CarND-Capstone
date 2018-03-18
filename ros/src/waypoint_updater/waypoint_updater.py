@@ -24,7 +24,8 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 30  # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 100  # Number of waypoints we will publish. You can change this number
+STOP_AHEAD_WPS = 0
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -169,7 +170,6 @@ class WaypointUpdater(object):
 
         if self.car_wp_idx < self.stop_waypoint_idx_for_traffic_light:
             if not self.already_planed_to_stop:
-                self.already_planed_to_stop = True
                 self._plan_stop_wps(self.stop_waypoint_idx_for_traffic_light)
             else:
                 self._update_next_waypoints(next_n_waypoints=self.next_n_waypoints,
@@ -190,17 +190,31 @@ class WaypointUpdater(object):
         # the stop lane is still in front of us
         number_of_wps_between_car_and_stop_lane = stop_waypoint_idx_for_traffic_light - self.car_wp_idx
 
-        if number_of_wps_between_car_and_stop_lane >= LOOKAHEAD_WPS:
-            # we can not plan for waypoints more far away then the LOOKAHEAD_WPS
+        if self.already_planed_to_stop:
+            # if we planed until the stop lane we must not change the plan
+            # but we must set waypoint in front of stop lane to 0 too so the controller doesn't get confused
+            for next_n_waypoint_idx_after_traffic_light in range(number_of_wps_between_car_and_stop_lane, LOOKAHEAD_WPS):
+                self.set_waypoint_velocity(self.next_n_waypoints,
+                                           next_n_waypoint_idx_after_traffic_light,
+                                           0)
+
             return
 
-        for current_wp_number_in_next_wps_array in range(number_of_wps_between_car_and_stop_lane):
+        for current_wp_number_in_next_wps_array in range(min(LOOKAHEAD_WPS, number_of_wps_between_car_and_stop_lane)):
             number_of_wp_until_stop = number_of_wps_between_car_and_stop_lane
             desired_wp_vel = self._calculate_decreasing_velocity(number_of_wp_until_stop,
                                                                  current_wp_number_in_next_wps_array)
+
+            if number_of_wps_between_car_and_stop_lane - current_wp_number_in_next_wps_array < STOP_AHEAD_WPS:
+                desired_wp_vel = 0
+
             self.set_waypoint_velocity(self.next_n_waypoints,
                                        current_wp_number_in_next_wps_array,
                                        max(desired_wp_vel, 0))
+
+        if number_of_wps_between_car_and_stop_lane < LOOKAHEAD_WPS:
+            # if we can plan until the stop lane, the planing is finished
+            self.already_planed_to_stop = True
 
     def _calculate_decreasing_velocity(self, number_of_wps_until_stop_lane, wp_number_in_next_wps):
         """

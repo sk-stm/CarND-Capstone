@@ -18,8 +18,8 @@ class Controller(object):
         # Implement the PID controller for the throttle and brake combined.
         # For positive values of control, the throttle will be used.
         # For negative values of control, it will be converted to brake.
-        v_kp = 0.1
-        v_ki = 0.02
+        v_kp = 0.2
+        v_ki = 0.002
         v_kd = 0.005
         self.vel_pid = PID(kp=v_kp, ki=v_ki, kd=v_kd, mn=-1.0, mx=1.0)
         self.max_brake = decel_limit * mass * wheel_radius
@@ -29,7 +29,7 @@ class Controller(object):
                                              max_lat_accel, max_steer_angle)
 
         self.lpf_steering = LowPassFilter(tau=2, ts=5)
-        self.cplotter = Cplotter()
+        #self.cplotter = Cplotter()
 
     def control(self, proposed_lin_vel, proposed_ang_vel, current_lin_vel):
         steering_angle = self._yaw_controller.get_steering(proposed_lin_vel,
@@ -46,7 +46,7 @@ class Controller(object):
             throttle = 0
             brake = self.max_brake * vel_cmd
 
-        self.cplotter.add_plpoint(proposed_lin_vel, current_lin_vel, vel_cmd)
-        self.cplotter.update()
+        #self.cplotter.add_plpoint(proposed_lin_vel, current_lin_vel, vel_cmd)
+        #self.cplotter.update()
         # Return throttle, brake, steer
         return throttle, brake, final_steering_angle
