@@ -14,8 +14,7 @@ class TLClassifier(object):
     def __init__(self):
         self.last_light = None
 
-        # TODO need to be more robust, perhaps use a ros parameter instead
-        self.gen_train_data = False
+        self.gen_train_data = rospy.get_param("~gen_train_data", default=False)
         
         if self.gen_train_data:
             self.num_files = 0
@@ -70,7 +69,6 @@ class TLClassifier(object):
             # rospy.loginfo("Calling model prediction image shape %s", np.shape(image_array))
             with self.graph.as_default():
                 light_predict = self.model.predict(image_array[None, :, :, :], batch_size=1)
-            # light_predict = self.model.predict(image_array[None,:,:,:], batch_size=1)
             lightval = np.argmax(light_predict)
-            rospy.loginfo("Returned from model prediction %s, pred: %d, state: %d", light_predict, lightval, light['light'].state)
+            rospy.logdebug("Returned from model prediction %s, pred: %d, state: %d", light_predict, lightval, light['light'].state)
             return lightval

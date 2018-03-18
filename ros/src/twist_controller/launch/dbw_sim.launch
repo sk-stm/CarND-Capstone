@@ -1,5 +1,8 @@
 <?xml version="1.0"?>
 <launch>
+    <arg name="start_plotter_twist" default="false" />
+    <arg name="start_plotter_steering" default="false" />
+
     <node pkg="twist_controller" type="dbw_node.py" name="dbw_node">
         <param name="vehicle_mass" value="1080." />
         <param name="fuel_capacity" value="0." />
@@ -11,5 +14,21 @@
         <param name="steer_ratio" value="14.8" />
         <param name="max_lat_accel" value="3." />
         <param name="max_steer_angle" value="8." />
+    </node>
+
+     <node
+        if="$(arg start_plotter_twist)"
+        pkg="rqt_plot"
+        type="rqt_plot"
+        name="control_plotter_twist"
+        args="/current_velocity/twist/linear/x /twist_cmd/twist/linear/x /vehicle/throttle_cmd/pedal_cmd /vehicle/brake_cmd/pedal_cmd">
+    </node>
+
+    <node
+        if="$(arg start_plotter_steering)"
+        pkg="rqt_plot"
+        type="rqt_plot"
+        name="control_plotter_steering"
+        args="/vehicle/steering_report/steering_wheel_angle /twist_cmd/twist/angular/z /vehicle/steering_cmd/steering_wheel_angle_cmd /vehicle/steering_cmd/steering_wheel_angle_velocity">
     </node>
 </launch>
