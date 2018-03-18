@@ -46,8 +46,8 @@ class TLClassifier(object):
         lstate = light['light'].state
 
         # Reduce image to to 1/4 size
-        #rs_image = cv2.resize(image, None, fx=0.5, fy=0.5)
-        rs_image = image
+        rs_image = cv2.resize(image, None, fx=0.5, fy=0.5)
+        # rs_image = image
         
 
         if self.gen_train_data:
