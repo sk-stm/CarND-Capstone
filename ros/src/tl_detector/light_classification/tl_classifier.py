@@ -46,8 +46,8 @@ class TLClassifier(object):
         lstate = light['light'].state
 
         # Reduce image to to 1/4 size
-        #rs_image = cv2.resize(image, None, fx=0.5, fy=0.5)
-        rs_image = image
+        rs_image = cv2.resize(image, None, fx=0.5, fy=0.5)
+        # rs_image = image
         
 
         if self.gen_train_data:
@@ -70,5 +70,7 @@ class TLClassifier(object):
             with self.graph.as_default():
                 light_predict = self.model.predict(image_array[None, :, :, :], batch_size=1)
             lightval = np.argmax(light_predict)
-            rospy.logdebug("Returned from model prediction %s, pred: %d, state: %d", light_predict, lightval, light['light'].state)
+            rospy.logdebug("Light prediction %s, pred: %d, state: %d", light_predict, lightval, light['light'].state)
+            if lightval != light['light'].state:
+                rospy.loginfo("Light prediction %s, pred: %d, state: %d", light_predict, lightval, light['light'].state)
             return lightval
