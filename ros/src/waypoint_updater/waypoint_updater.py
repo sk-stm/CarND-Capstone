@@ -104,13 +104,13 @@ class WaypointUpdater(object):
         next_n_waypoint_glob_idxs = []
         # initial fill
         for i in range(LOOKAHEAD_WPS):
-            next_idx = car_wp_idx + i
-            next_wp = copy.deepcopy(self.base_waypoints.waypoints[next_idx])
+            next_idx = (car_wp_idx + i) % self.base_waypoints_length
+            next_wp = copy.deepcopy(self.base_waypoints[next_idx])
             next_n_waypoints.append(next_wp)
             next_n_waypoint_glob_idxs.append(next_idx)
             # start smoothly when standing
-            current_wp_vel = self.get_waypoint_velocity(self.base_waypoints.waypoints[car_wp_idx])
-            desired_vel_at_end_of_trajectory = self.get_waypoint_velocity(self.base_waypoints.waypoints[car_wp_idx + LOOKAHEAD_WPS])
+            current_wp_vel = self.get_waypoint_velocity(self.base_waypoints[car_wp_idx])
+            desired_vel_at_end_of_trajectory = self.get_waypoint_velocity(self.base_waypoints[(car_wp_idx + LOOKAHEAD_WPS) % self.base_waypoints_length])
             next_wp_vel = current_wp_vel + (current_wp_vel - desired_vel_at_end_of_trajectory) / LOOKAHEAD_WPS
             self.set_waypoint_velocity(next_n_waypoints, -1, next_wp_vel)
         return next_n_waypoints, next_n_waypoint_glob_idxs
@@ -131,8 +131,8 @@ class WaypointUpdater(object):
             next_n_waypoints.pop(0)
             next_n_waypoint_glob_idxs.pop(0)
             # append as many as removed at the end
-            next_wp_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints.waypoints, car_wp_idx + LOOKAHEAD_WPS + i)
-            next_wp = copy.deepcopy(self.base_waypoints.waypoints[next_wp_idx])
+            next_wp_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints, car_wp_idx + LOOKAHEAD_WPS + i)
+            next_wp = copy.deepcopy(self.base_waypoints[next_wp_idx])
             next_n_waypoints.append(next_wp)
             next_n_waypoint_glob_idxs.append(car_wp_idx + LOOKAHEAD_WPS + i)
             i += 1
@@ -233,13 +233,13 @@ class WaypointUpdater(object):
         """
         self.final_waypoints_pub.publish(Lane(waypoints=self.next_n_waypoints))
 
-    def waypoints_cb(self, waypoints):
+    def waypoints_cb(self, msg):
         """
         Gets a giant list of waypoints in the world in Lane msg format.
         :param waypoints: waypoint list
         """
-        self.base_waypoints = waypoints
-        self.base_waypoints_length = len(self.base_waypoints.waypoints)
+        self.base_waypoints = msg.waypoints
+        self.base_waypoints_length = len(self.base_waypoints)
 
     def _find_wp_in_front_of_car(self):
         """
@@ -253,18 +253,18 @@ class WaypointUpdater(object):
         closest_dist = float("inf")
 
         if self.car_wp_idx is not None:
-            closest_dist = self._wp_car_dist(self.base_waypoints.waypoints[self.car_wp_idx])
-            next_wp_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints.waypoints, self.car_wp_idx + i)
-            next_wp_car_dist = self._wp_car_dist(self.base_waypoints.waypoints[next_wp_idx])
+            closest_dist = self._wp_car_dist(self.base_waypoints[self.car_wp_idx])
+            next_wp_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints, self.car_wp_idx + i)
+            next_wp_car_dist = self._wp_car_dist(self.base_waypoints[next_wp_idx])
             while closest_dist > next_wp_car_dist:
                 closest_dist = next_wp_car_dist
                 i += 1
-                next_wp_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints.waypoints, self.car_wp_idx + i)
-                next_wp_car_dist = self._wp_car_dist(self.base_waypoints.waypoints[next_wp_idx])
-                closest_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints.waypoints, self.car_wp_idx + i)
+                next_wp_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints, self.car_wp_idx + i)
+                next_wp_car_dist = self._wp_car_dist(self.base_waypoints[next_wp_idx])
+                closest_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints, self.car_wp_idx + i)
         else:
             # initial search in all the waypoints
-            for idx, wp in enumerate(self.base_waypoints.waypoints):
+            for idx, wp in enumerate(self.base_waypoints):
                 curr_dist = self._wp_car_dist(wp)
                 if curr_dist < closest_dist:
                     closest_idx = idx
