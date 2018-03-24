@@ -1,7 +1,6 @@
 *.py[cod]
 .idea
 ros/src/tl_detector/sim_data/
-ros/src/tl_detector/model.h5
 ros/src/tl_detector/model.png
 
 build
