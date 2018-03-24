@@ -3,6 +3,7 @@ import os
 import cv2
 import numpy as np
 import sklearn
+import keras
 
 lines = []
 with open("sim_data/labels.csv") as csvfile:
@@ -36,7 +37,6 @@ train_lines, validation_lines = \
 def generator(lines, batch_size=32):
     num_lines = len(lines)
     path = "sim_data"
-    # encode = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
     # Loop forever, the generator never terminates
     while 1:
         # shuffle every epoch
@@ -51,7 +51,6 @@ def generator(lines, batch_size=32):
                 images.append(image)
                 state = int(line[1])
                 states.append(state)
-                # states.append(encode[state])
                 # flipped image
                 images.append(cv2.flip(image, 1))
                 states.append(state)
@@ -68,28 +67,35 @@ from keras.layers import Flatten, Dense, Conv2D, Dropout
 from keras.layers import Lambda, MaxPooling2D, Cropping2D
 import matplotlib.pyplot as plt
 
-model = Sequential()
-model.add(Lambda(lambda x: x / 255.0 - 0.5, input_shape=ishape))
-# Crop the top 200 lines of the image since the lights are always below that
-# model.add(Cropping2D(cropping=((100, 0), (0, 0))))
-model.add(Conv2D(8, (5, 5), activation="relu"))
-model.add(MaxPooling2D())
-model.add(Conv2D(10, (5, 5), activation="relu"))
-model.add(MaxPooling2D())
-model.add(Conv2D(12, (5, 5), activation="relu"))
-model.add(MaxPooling2D())
-model.add(Conv2D(18, (3, 3), activation="relu"))
-model.add(MaxPooling2D())
-model.add(Flatten())
-model.add(Dense(120, activation="relu"))
-# model.add(Dropout(0.25))
-model.add(Dense(84, activation="relu"))
-# model.add(Dropout(0.25))
-model.add(Dense(10, activation="relu"))
-# model.add(Dropout(0.25))
-model.add(Dense(3, activation='softmax'))
+# if model.h5 already exists use it
+if os.path.isfile("model.h5"):
+    print "Using existing model"
+    model = keras.models.load_model("model.h5")
+else:
+    model = Sequential()
+    model.add(Lambda(lambda x: x / 255.0 - 0.5, input_shape=ishape))
+    # Crop the top 200 lines of the image since the lights are always below that
+    # model.add(Cropping2D(cropping=((100, 0), (0, 0))))
+    model.add(Conv2D(8, (5, 5), activation="relu"))
+    model.add(MaxPooling2D())
+    model.add(Conv2D(10, (5, 5), activation="relu"))
+    model.add(MaxPooling2D())
+    model.add(Conv2D(12, (5, 5), activation="relu"))
+    model.add(MaxPooling2D())
+    model.add(Conv2D(18, (3, 3), activation="relu"))
+    model.add(MaxPooling2D())
+    model.add(Conv2D(24, (3, 3), activation="relu"))
+    model.add(MaxPooling2D())
+    model.add(Flatten())
+    model.add(Dense(120, activation="relu"))
+    # model.add(Dropout(0.25))
+    model.add(Dense(84, activation="relu"))
+    # model.add(Dropout(0.25))
+    model.add(Dense(10, activation="relu"))
+    # model.add(Dropout(0.25))
+    model.add(Dense(3, activation='softmax'))
 
-model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
 # from keras.utils import plot_model
 # plot_model(model, to_file='model.png')
