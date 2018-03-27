@@ -55,7 +55,7 @@ Both use cases need a separately trained classifier.
 
 #### Traffic light classifier for the Simulator
 For the simulator traffic light classifier we use the following architecture:
-![architecture](ros/src/tl_detector/model.png)
+<img src="ros/src/tl_detector/model.png" alt="Simulator Model" style="width: 179px; height: 625px"/>
 
 This classifier classifies each incoming image as a whole to infer the state of the traffic light.
 We trained this classifier solely a self produced data set of the images from the simulator. We found
