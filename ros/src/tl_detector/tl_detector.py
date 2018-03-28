@@ -167,15 +167,14 @@ class TLDetector(object):
         # handle the cases where we measure over the beginning of the waypoints loop
         # such that we return always the shortes distance on the loop
         if idx_dist < -len(self.waypoints.waypoints) / 2:
-            idx_dist = len(self.waypoints.waypoints) + idx_dist
+            idx_dist += len(self.waypoints.waypoints)
         elif idx_dist > len(self.waypoints.waypoints) / 2:
-            idx_dist = -len(self.waypoints.waypoints) + idx_dist
+            idx_dist += -len(self.waypoints.waypoints)
         
         # the direction (forward vs. backwards)
         dir = np.sign(idx_dist)
         if dir < 0:
             wp_idx1, wp_idx2 = wp_idx2, wp_idx1
-
         
         idx = wp_idx1
         while idx != wp_idx2:
@@ -200,11 +199,10 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        if(self.use_ground_truth):
+        if self.use_ground_truth:
             return light['light'].state
 
-
-        #Get classification
+        # Get classification
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
         return self.light_classifier.get_classification(light, cv_image)
 
@@ -227,7 +225,7 @@ class TLDetector(object):
 
         # find the wp idx of the lights and their distance to the car
         relevant_lights = []
-        for idx,l in enumerate(self.lights):
+        for idx, l in enumerate(self.lights):
             # find the corresponding stop-line (this assumes that the traffic lights and stop lines have the same index in the arrays)
             tl_stop_line_pose = Pose()
             tl_stop_line_pose.position.x = self.config['stop_line_positions'][idx][0]
@@ -255,16 +253,13 @@ class TLDetector(object):
             rospy.logdebug("No relevant TL found")
             return -1, TrafficLight.UNKNOWN
 
-
         # sort by distance and select the closes one
         relevant_lights.sort(key=lambda x: x['distance'])
         next_relevant_tl = relevant_lights[0]
         rospy.logdebug("Next relevant TL is %.2fm ahead at wp %d.", next_relevant_tl['distance'], next_relevant_tl['stop_line_wp_idx'])
 
-
         # find its state
         next_relevant_tl['state'] = self.get_light_state(next_relevant_tl)
-
 
         return next_relevant_tl['stop_line_wp_idx'], next_relevant_tl['state']
 
