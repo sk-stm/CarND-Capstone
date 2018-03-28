@@ -29,7 +29,6 @@ class Controller(object):
                                              max_lat_accel, max_steer_angle)
 
         self.lpf_steering = LowPassFilter(tau=2, ts=5)
-        #self.cplotter = Cplotter()
 
     def control(self, proposed_lin_vel, proposed_ang_vel, current_lin_vel):
         steering_angle = self._yaw_controller.get_steering(proposed_lin_vel,
@@ -39,14 +38,12 @@ class Controller(object):
 
         vel_error = proposed_lin_vel - current_lin_vel
         vel_cmd = self.vel_pid.step(vel_error, self._sample_time)
-        if vel_cmd >= 0:
+        if proposed_lin_vel >= 1.5:
             throttle = vel_cmd
             brake = 0
         else:
             throttle = 0
-            brake = self.max_brake * vel_cmd
+            brake = - self.max_brake * 0.4
 
-        #self.cplotter.add_plpoint(proposed_lin_vel, current_lin_vel, vel_cmd)
-        #self.cplotter.update()
         # Return throttle, brake, steer
         return throttle, brake, final_steering_angle
