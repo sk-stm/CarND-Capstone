@@ -67,6 +67,7 @@ Both use cases need a separately trained classifier.
 
 #### Traffic light classifier for the Simulator
 For the simulator traffic light classifier we use the following architecture:
+
 ![rw_architecture](imgs/model.png)
 
 This classifier classifies each incoming image as a whole to infer the state of the traffic light.
