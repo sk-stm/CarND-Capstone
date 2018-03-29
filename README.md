@@ -3,11 +3,11 @@ This is the project repo for the final project of the Udacity Self-Driving Car N
 # Team Mater
 # Udacity Project CarND-Capstone
 ## Team Member
- * Stephan Meyer
- * Ashok Singhal
- * Marcin Mirosław
- * Ramesh Chukka
- * Renwei Wang
+ * Stephan Meyer (skstm@web.de)
+ * Ashok Singhal (wuffusg@gmail.com)
+ * Marcin Mirosław (mbmiroslaw@gmail.com)
+ * Ramesh Chukka (rnaidu02@gmail.com)
+ * Renwei Wang (aimllifetime@gmail.com)
 
 ### Installing our solution
 
@@ -56,7 +56,7 @@ For the traffic light detection we have 2 different use cases.
 * The Simulator
 * The real world
 
-Both use cases need a separately trained classifier.
+Both cases use a separately trained classifier.
 
 #### Traffic light classifier for the Simulator
 For the simulator traffic light classifier we use the following architecture:
@@ -95,7 +95,7 @@ from the track: [dataset](https://drive.google.com/file/d/0B-Eiyn-CUQtxdUZWMkFfQ
 was also used and linked by [coldKnight](https://github.com/coldKnight/TrafficLight_Detection-TensorFlowAPI).
 We trained the model until the loss converged:
 ![Loss_curve](imgs/Loss_curve.png)
-After converging, we were able to get a training/validation accuracy of ~99.7%.
+After converging, we were able to get a training/validation accuracy of ~95.1%.
 Here are the real world images that are classified with the real world classifier.
 
 RED signal
@@ -170,6 +170,11 @@ Currently we are only focusing of one traffic light in front of the car. We assu
 light faces the car and is upright. In reality many traffic lights can occur in various shapes and at
 various positions and some might only be relevant for cars in other lanes. In this project we abstract
 from this variety of traffic lights.
+
+Further more we currently use 2 separate classifiers for traffic light detection. We separated the tasks
+because the traffic lights in the simulator are quite different from the real world traffic light.
+If one puts more effort in training and generalising one classifier it might be possible to use just
+one classifier for both scenarios.
 
 
 Please use **one** of the two installation options, either native **or** docker installation.
