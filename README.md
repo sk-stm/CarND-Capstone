@@ -1,6 +1,7 @@
 This is the project repo for the final project of the Udacity Self-Driving Car Nanodegree: Programming a Real Self-Driving Car. For more information about the project, see the project introduction [here](https://classroom.udacity.com/nanodegrees/nd013/parts/6047fe34-d93c-4f50-8336-b70ef10cb4b2/modules/e1a23b06-329a-4684-a717-ad476f0d8dff/lessons/462c933d-9f24-42d3-8bdc-a08a5fc866e4/concepts/5ab4b122-83e6-436d-850f-9f4d26627fd9).
 
-# Team Mater Udacity Project CarND-Capstone
+# Team Mater
+# Udacity Project CarND-Capstone
 ## Team Member
  * Stephan Meyer
  * Ashok Singhal
@@ -28,26 +29,18 @@ the correct model.
 
 ## Our approach:
 
-### Waypoint following
-
-In order for the car to stay on the track it has to follow a given trajectory.
-This trajectory is made of waypoints that are fix for the whole track. The car therefore drives
-by following the waypoints.
-
-Besides calculating the next waypoints to come, it's important to keep the efficiency of the code in mind.
- Simply deep copying the waypoint nodes is way to slow for a 50Hz broad cast. To overcome this issue we use
- a separte list which is filled once initially and is updated every time another car position is received
- and the next way point is behind the car.
- This way we only need to adjust the front and the end of the waypoint queue, which speeds up calculation
- significantly.
+### Waypoint Updater
+#### Following the Track
+When the simulator starts up, it publishes a single (one-time) message to the `/base_waypoints` ros topic that specifies a series of waypoints that define the entire track that the car is expected to follow. Our code for the `waypoint_updater` node uses these base waypoints, along with the current pose (location and heading) of the car, to periodically update the `final_waypoints` ros topic with a list of `LOOKAHEAD_WPS = 100` waypoints that the car should follow, beginning with the waypoint immediately ahead of the car.
 
  ![car_with_waypoints](imgs/run_car2.png)
 
-Furthermore the the plan made must be adjusted, once a red traffic light is detected. If a traffic light
-is detected as red, the plan made so far is thrown away and another plan is calculated to gradually stop
-the car at the stop lane.
-The velocity is linearly reduced to reach 0 at the stop lane in front of the traffic
-light.
+#### Efficiency Considerations
+In order to update the `final_waypoints` at the desired frequency of 50Hz, we needed to pay attention to the efficiency of the `waypoint_updater` node.  Instead of doing a full deep copy of the entire list of waypoints at each update, since the car only moves a few waypoints at each step we instead only delete the few waypoints that it has just passed at the beginning of the previous list and append a few new waypoints at the end of the list. This speeds up calculation significantly.
+
+#### Stopping at Red Traffic Lights
+The waypoint list generated above for following the track must be adjusted to ensure that the car stops smoothly at red traffic lights.
+If a traffic light is detected as red, the plan made so far is discarded and another plan is calculated to linearly reduce the velocity to reach 0 at the stop limit line in front of the traffic light.
 For this we plan as many steps ahead of the car as are defined by an parameter
 and never change the values anymore unless the state of the traffic light changes.
 When the traffic light switches to green again, the stopping plan must again be overwritten with the
@@ -55,7 +48,7 @@ plan to follow the waypoints.
 
 The plan is implemented to be computed linearly. This means we first compute a plan without including the
 traffic lights and then apply a traffic light "filter" to the values in order to change them if a traffic
-light was detected. This way the code stays linearly and other obstackles may be implemented in future
+light was detected. This way the code stays linearly and other obstacles may be implemented in future
 projects.
 
 ### Traffic light detection
@@ -70,9 +63,20 @@ For the simulator traffic light classifier we use the following architecture:
 
 ![rw_architecture](imgs/model.png)
 
+Note that image is scaled to 1/4 the size of the camera image by scaling the width and height by 1/2 (300x400x3 instead of 600x800x3).  This reduces the model size substantially while still getting good quality predictions.
+
+The first (lambda_1) stage of the model normalizes each channel.
+
 This classifier classifies each incoming image as a whole to infer the state of the traffic light.
-We trained this classifier solely a self produced data set of the images from the simulator. We found
-that this architecture is both light weight and robust to predict the traffic lights in the simulator.
+
+##### Data Collection for Training
+To collect training data, the classifier code was modified so that instead of predicting the light state, it saves the camera images near traffic lights to files and the "ground truths" of the states of the traffic lights obtained from the simulator to a csv file.  The training code then uses this csv file to implement a generator to feed data to train the model.
+
+The training data was collected by manually driving the car around the track several times with the classifier programmed to save data instead of classifying the light.  That way we could drive very slowly near traffic lights to collect images of the lights from various positions and in all three states.
+
+We noticed that there is a delay after the "ground truth" changes and the change appears in the camera image.  Therefore, we manually corrected the "ground truth" in the csv file for images near light state transitions so that we train the model with correctly labelled images.
+
+We found that this architecture is both light weight and robust to predict the traffic lights in the simulator.
 Therefore this model is also checked in to this repository.
 
 #### Real World traffic light detector
@@ -121,8 +125,8 @@ GREEN signal
 ### The controllers
 
 #### Steering controller
-For steering we used the YawController which first calculated the angular velocity of the car and 
-weights that with the current velocity. After that it makes sure, that the angular velocity stays 
+For steering we used the YawController which first calculated the angular velocity of the car and
+weights that with the current velocity. After that it makes sure, that the angular velocity stays
 within bounds of the max and min yaw rate of the car. The steering angle is then calculated according
 to the current velocity of the car and the angular velocity.
 The final steering angle is then low pass filtered for smoother driving
@@ -134,31 +138,38 @@ For the velocity control we use a PID controller with
 * v_kd = 0.005
 and a min/max cap at -1 and 1 respectively.
 
+The throttle values that the simulator expects are between 0 and 1, so the positive PID control values can be directly used for the throttle.
 If the proposed velocity is above a threshold of 1.5 the throttle is pushed up to the value the PID
-controller puts out and the brake is set to 0. If the proposed velocity is below that threshold, 
+controller puts out and the brake is set to 0. If the proposed velocity is below that threshold,
 the car brakes and the throttle command is set to 0.
 
-### Further implementations
+Since the simulator requires the brake value in units of torque (Nm) and we want to remain safely within the maximum deceleration limit, we compute the maximum allowable braking torque as follows:
 
-In this scenario the car behaves as expected. However in real scenarios there are many other things 
-that need to be considered. Unforseen events can happen where the car needs to stop immediately.
-Also other obstacles can occur on the track and the route might need to be recalculated. These 
-situations are not covered within the behaviour of the car so far and would need to be implemented
+`max_brake = decel_limit * mass * wheel_radius`
+
+When applying the brake, we use 0.4 times the max_brake so that we are safely within the maximum deceleration allowed.
+
+### Further Improvements
+
+In this scenario the car behaves as expected. However in real scenarios there are many other things
+that need to be considered. Unforeseen events can happen where the car needs to stop immediately.
+Also other obstacles can occur on the track and the route might need to be recalculated. These
+situations are not covered within the behavior of the car so far and would need to be implemented
 in a future project.
 
-Also for the behaviour one need to implement a more general solution to the point of no return
-in front of a traffic light. The car has to be able to decide whether to stop before a traffic
-light depending on it's current velocity. Meaning if the car is fast enough to pass the traffic 
-light stop lane before the traffic light switches to red, it should not brake but rather accelerate.
-However this "point of no return" in the real world depends on many factors like the pace of 
-switching lights of the traffic light, the traffic around the car and of course the velocity of 
+Also for the behavior one need to implement a more general solution to the point of no return
+in front of a traffic light. In particular, it needs to better handle the yellow light and to decide whether to stop before a traffic
+light depending on it's current velocity and distance from the light. If the light changes to yellow when the car is near the light, the car must decide if it is fast enough to pass the intersection before the traffic light switches to red, and if so it should not brake but rather continue.
+
+However this "point of no return" in the real world depends on many factors like the pace of
+switching lights of the traffic light, the traffic around the car and of course the velocity of
 the car. Including these factors would make a much smoother driving experience.
 
 The traffic light detection also is simplified in many aspects in contrast to the "real world".
-Currently we are only focusing of one traffic light in front of the car. We assume that this traffic 
-light faces the car and is upright. In reality many traffic lights can occur in various shapes and at 
-various positions and some might only be relevant for cars in other lanes. In this project we abstract 
-from this variety of traffic lights. 
+Currently we are only focusing of one traffic light in front of the car. We assume that this traffic
+light faces the car and is upright. In reality many traffic lights can occur in various shapes and at
+various positions and some might only be relevant for cars in other lanes. In this project we abstract
+from this variety of traffic lights.
 
 
 Please use **one** of the two installation options, either native **or** docker installation.
