@@ -31,9 +31,9 @@ class Controller(object):
         self.lpf_steering = LowPassFilter(tau=2, ts=5)
 
     def control(self, proposed_lin_vel, proposed_ang_vel, current_lin_vel):
-        steering_angle = self._yaw_controller.get_steering(proposed_lin_vel,
-                                                           proposed_ang_vel,
-                                                           current_lin_vel)
+        steering_angle = 2*self._yaw_controller.get_steering(proposed_lin_vel,
+                                                             proposed_ang_vel,
+                                                             current_lin_vel)
         final_steering_angle = self.lpf_steering.filt(steering_angle)
 
         vel_error = proposed_lin_vel - current_lin_vel

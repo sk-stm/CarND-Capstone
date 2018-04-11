@@ -24,12 +24,13 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 100  # Number of waypoints we will publish. You can change this number
 BUFFOR_STOP = 1  # Number of waypoint that car will stop before stop line waypoint
 
 
 class WaypointUpdater(object):
     def __init__(self):
+        self.LOOKAHEAD_WPS = 100
+
         rospy.init_node('waypoint_updater')
 
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
@@ -50,6 +51,7 @@ class WaypointUpdater(object):
         self.car_wp_idx = None
         self.current_vel = 0
         self.car_pos = [0, 0, 0]
+
 
         rospy.spin()
 
@@ -105,15 +107,15 @@ class WaypointUpdater(object):
         next_n_waypoints = []
         next_n_waypoint_glob_idxs = []
         # initial fill
-        for i in range(LOOKAHEAD_WPS):
+        for i in range(self.LOOKAHEAD_WPS):
             next_idx = car_wp_idx + i
             next_wp = copy.deepcopy(self.base_waypoints.waypoints[next_idx])
             next_n_waypoints.append(next_wp)
             next_n_waypoint_glob_idxs.append(next_idx)
             # start smoothly when standing
             current_wp_vel = self.get_waypoint_velocity(self.base_waypoints.waypoints[car_wp_idx])
-            desired_vel_at_end_of_trajectory = self.get_waypoint_velocity(self.base_waypoints.waypoints[car_wp_idx + LOOKAHEAD_WPS])
-            next_wp_vel = current_wp_vel + (current_wp_vel - desired_vel_at_end_of_trajectory) / LOOKAHEAD_WPS
+            desired_vel_at_end_of_trajectory = self.get_waypoint_velocity(self.base_waypoints.waypoints[car_wp_idx + self.LOOKAHEAD_WPS])
+            next_wp_vel = current_wp_vel + (current_wp_vel - desired_vel_at_end_of_trajectory) / self.LOOKAHEAD_WPS
             self.set_waypoint_velocity(next_n_waypoints, -1, next_wp_vel)
         return next_n_waypoints, next_n_waypoint_glob_idxs
 
@@ -128,15 +130,15 @@ class WaypointUpdater(object):
         # if waypoints are available
         # find current wp in list of next wps starting at the beginning
         i = 0
-        while i < LOOKAHEAD_WPS and next_n_waypoint_glob_idxs[i] < car_wp_idx:
+        while i < self.LOOKAHEAD_WPS and next_n_waypoint_glob_idxs[i] < car_wp_idx:
             # remove all entries up to that index
             next_n_waypoints.pop(0)
             next_n_waypoint_glob_idxs.pop(0)
             # append as many as removed at the end
-            next_wp_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints.waypoints, car_wp_idx + LOOKAHEAD_WPS + i)
+            next_wp_idx = self._get_wp_idx_wihtin_array_bound(self.base_waypoints.waypoints, car_wp_idx + self.LOOKAHEAD_WPS + i)
             next_wp = copy.deepcopy(self.base_waypoints.waypoints[next_wp_idx])
             next_n_waypoints.append(next_wp)
-            next_n_waypoint_glob_idxs.append(car_wp_idx + LOOKAHEAD_WPS + i)
+            next_n_waypoint_glob_idxs.append(car_wp_idx + self.LOOKAHEAD_WPS + i)
             i += 1
 
     def _get_wp_idx_wihtin_array_bound(self, waypoint_list, idx):
@@ -180,7 +182,7 @@ class WaypointUpdater(object):
 
         else:
             # we just drove over the stop line ut the traffic light is still red -> set all next wps to 0 vel
-            for i in range(LOOKAHEAD_WPS):
+            for i in range(self.LOOKAHEAD_WPS):
                 self.set_waypoint_velocity(self.next_n_waypoints, i, 0)
 
     def _plan_stop_wps(self, stop_waypoint_idx_for_traffic_light):
@@ -195,14 +197,14 @@ class WaypointUpdater(object):
         if self.already_planed_to_stop:
             # if we planed until the stop lane we must not change the plan
             # but we must set waypoint in front of stop lane to 0 too so the controller doesn't get confused
-            for next_n_waypoint_idx_after_traffic_light in range(number_of_wps_between_car_and_stop_lane, LOOKAHEAD_WPS):
+            for next_n_waypoint_idx_after_traffic_light in range(number_of_wps_between_car_and_stop_lane, self.LOOKAHEAD_WPS):
                 self.set_waypoint_velocity(self.next_n_waypoints,
                                            next_n_waypoint_idx_after_traffic_light,
                                            0)
 
             return
 
-        for current_wp_number_in_next_wps_array in range(min(LOOKAHEAD_WPS, number_of_wps_between_car_and_stop_lane)):
+        for current_wp_number_in_next_wps_array in range(min(self.LOOKAHEAD_WPS, number_of_wps_between_car_and_stop_lane)):
             number_of_wp_until_stop = number_of_wps_between_car_and_stop_lane - BUFFOR_STOP
             desired_wp_vel = self._calculate_decreasing_velocity(number_of_wp_until_stop,
                                                                  current_wp_number_in_next_wps_array)
@@ -214,7 +216,7 @@ class WaypointUpdater(object):
                                        current_wp_number_in_next_wps_array,
                                        max(desired_wp_vel, 0))
 
-        if number_of_wps_between_car_and_stop_lane < LOOKAHEAD_WPS:
+        if number_of_wps_between_car_and_stop_lane < self.LOOKAHEAD_WPS:
             # if we can plan until the stop lane, the planing is finished
             self.already_planed_to_stop = True
 
@@ -244,6 +246,8 @@ class WaypointUpdater(object):
         """
         self.base_waypoints = waypoints
         self.base_waypoints_length = len(self.base_waypoints.waypoints)
+        if self.base_waypoints_length < self.LOOKAHEAD_WPS:
+            self.LOOKAHEAD_WPS = self.base_waypoints_length // 2
 
     def _find_wp_in_front_of_car(self):
         """

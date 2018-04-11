@@ -12,6 +12,9 @@
     <!--Waypoint Updater Node -->
     <include file="$(find waypoint_updater)/launch/waypoint_updater.launch"/>
 
+    <!-- Use real world classifier -->
+    <param name="real_world_classifier" value="True"/>
+
     <!--Traffic Light Locations and Camera Config -->
     <param name="traffic_light_config" textfile="$(find tl_detector)/site_traffic_light_config.yaml" />
 

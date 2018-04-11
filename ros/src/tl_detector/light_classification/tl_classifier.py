@@ -15,7 +15,7 @@ class TLClassifier(object):
         self.last_light = None
 
         self.gen_train_data = rospy.get_param("~gen_train_data", default=False)
-        self.use_real_world_classifier = rospy.get_param("~real_world_classifier", default=False)
+        self.use_real_world_classifier = rospy.get_param("real_world_classifier", default=False)
         
         if self.gen_train_data:
             self.num_files = 0
