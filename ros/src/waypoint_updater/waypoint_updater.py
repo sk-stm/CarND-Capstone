@@ -108,13 +108,14 @@ class WaypointUpdater(object):
         next_n_waypoint_glob_idxs = []
         # initial fill
         for i in range(self.LOOKAHEAD_WPS):
-            next_idx = car_wp_idx + i
+            next_idx = (car_wp_idx + i) % self.base_waypoints_length
             next_wp = copy.deepcopy(self.base_waypoints.waypoints[next_idx])
             next_n_waypoints.append(next_wp)
             next_n_waypoint_glob_idxs.append(next_idx)
             # start smoothly when standing
             current_wp_vel = self.get_waypoint_velocity(self.base_waypoints.waypoints[car_wp_idx])
-            desired_vel_at_end_of_trajectory = self.get_waypoint_velocity(self.base_waypoints.waypoints[car_wp_idx + self.LOOKAHEAD_WPS])
+            end_of_trajectory_idx = (car_wp_idx + self.LOOKAHEAD_WPS) % self.base_waypoints_length
+            desired_vel_at_end_of_trajectory = self.get_waypoint_velocity(self.base_waypoints.waypoints[end_of_trajectory_idx])
             next_wp_vel = current_wp_vel + (current_wp_vel - desired_vel_at_end_of_trajectory) / self.LOOKAHEAD_WPS
             self.set_waypoint_velocity(next_n_waypoints, -1, next_wp_vel)
         return next_n_waypoints, next_n_waypoint_glob_idxs
@@ -246,8 +247,6 @@ class WaypointUpdater(object):
         """
         self.base_waypoints = waypoints
         self.base_waypoints_length = len(self.base_waypoints.waypoints)
-        if self.base_waypoints_length < self.LOOKAHEAD_WPS:
-            self.LOOKAHEAD_WPS = self.base_waypoints_length // 2
 
     def _find_wp_in_front_of_car(self):
         """
