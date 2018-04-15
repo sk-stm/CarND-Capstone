@@ -16,7 +16,8 @@ class TLClassifier(object):
 
         self.gen_train_data = rospy.get_param("~gen_train_data", default=False)
         self.use_real_world_classifier = rospy.get_param("real_world_classifier", default=False)
-        
+        self.classifier_loaded = False
+
         if self.gen_train_data:
             self.num_files = 0
             rospack = rospkg.RosPack()
@@ -25,7 +26,18 @@ class TLClassifier(object):
                 os.makedirs(self.path)
             f = open(os.path.join(self.path, 'labels.csv'), 'wb')
             self.writer = csv.writer(f)
-        else:
+
+    def get_classification(self, light, image):
+        """Determines the color of the traffic light in the image
+
+        Args:
+            image (cv::Mat): image containing the traffic light
+
+        Returns:
+            int: ID of traffic light color (specified in styx_msgs/TrafficLight)
+
+        """
+        if not self.classifier_loaded:
             if self.use_real_world_classifier:
                 # real world classifier
                 self.real_world_detection_graph = tf.Graph()
@@ -39,6 +51,7 @@ class TLClassifier(object):
                     self.real_world_detection_classes = self.real_world_detection_graph.get_tensor_by_name('detection_classes:0')
                 self.sess = tf.Session(graph=self.real_world_detection_graph)
                 rospy.loginfo("real world detection model loaded")
+                self.classifier_loaded = True
             else:
                 # simulation classifier
                 # TODO need to add check that the model is compatible with current keras version
@@ -46,17 +59,8 @@ class TLClassifier(object):
                 self.model._make_predict_function()
                 rospy.loginfo("keras model loaded")
                 self.graph = tf.get_default_graph()
+                self.classifier_loaded = True
 
-    def get_classification(self, light, image):
-        """Determines the color of the traffic light in the image
-
-        Args:
-            image (cv::Mat): image containing the traffic light
-
-        Returns:
-            int: ID of traffic light color (specified in styx_msgs/TrafficLight)
-
-        """
         # read and save the light state immediately because it can change
         # by the time we save the image
         lstate = light['light'].state
